@@ -115,14 +115,38 @@ func (twilio *MonitorClient) List(startDate, endDate, logLevel string) (*Monitor
 
 // NOTE: Belongs on separate unit
 func (twilio *MonitorClient) Poll() <-chan []*MonitorTruncatedAlert {
-	twilio.Ticker = time.NewTicker(10 * time.Second)
+	twilio.Ticker = time.NewTicker(60 * time.Second)
 	responses := make(chan []*MonitorTruncatedAlert)
 	go func() {
 		for _ = range twilio.Ticker.C {
-			res, _ := twilio.List("2018-02-16T20:43:17Z", "2018-02-16T21:01:27Z", Error)
+			res, _ := twilio.List("2018-02-28T00:00:00Z", "2018-03-01T00:00:00Z", Error)
 			responses <- res.Alerts
 		}
 	}()
 
 	return responses
+}
+
+type MonitorAlertDeduplicator struct {
+	Cache map[string]*MonitorTruncatedAlert
+}
+
+func NewMonitorAlertDeduplicator() *MonitorAlertDeduplicator {
+	return &MonitorAlertDeduplicator{
+		Cache: make(map[string]*MonitorTruncatedAlert),
+	}
+}
+
+func (dedup *MonitorAlertDeduplicator) Update(alerts []*MonitorTruncatedAlert) []*MonitorTruncatedAlert {
+	ret := make([]*MonitorTruncatedAlert, 1)
+
+	for _, alert := range alerts {
+		_, ok := dedup.Cache[alert.Sid]
+		if !ok {
+			dedup.Cache[alert.Sid] = alert
+			ret = append(ret, alert)
+		}
+	}
+
+	return ret
 }
